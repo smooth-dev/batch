@@ -1,0 +1,233 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:batch="http://www.springframework.org/schema/batch" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/batch	http://www.springframework.org/schema/batch/spring-batch-3.0.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.0.xsd"
+		default-autowire="byName" default-init-method="init">
+	<import resource="classpath:context-datasource.xml"/>
+
+
+	<!-- JobRepository and JobLauncher are configuration/setup classes -->
+	<bean id="jobRepository" class="org.springframework.batch.core.repository.support.MapJobRepositoryFactoryBean" />
+
+	<bean id="jobLauncher" 	class="org.springframework.batch.core.launch.support.SimpleJobLauncher">
+		<property name="jobRepository" ref="jobRepository" />
+	</bean>
+
+	<bean id="jobRegistry" class="org.springframework.batch.core.configuration.support.MapJobRegistry"/>
+	
+	<!-- 
+		 A BeanPostProcessor that registers Job beans with a JobRegistry.
+	 -->
+	<bean class="org.springframework.batch.core.configuration.support.JobRegistryBeanPostProcessor">
+		<property name="jobRegistry" ref="jobRegistry"/>
+	</bean>
+
+	<!-- Thanks to this bean, you can now refer dynamic files in input folder whose names can be different on each run-->
+	<bean id="inputExamResultJobFile" class="org.springframework.core.io.FileSystemResource" scope="step">
+		<constructor-arg value="#{jobParameters[examResultInputFile]}"/>
+	</bean>
+
+
+	<!-- ItemReader reads a complete line one by one from input file -->
+<!--
+	<bean id="flatFileItemReader" class="org.springframework.batch.item.file.FlatFileItemReader"  scope="step">
+		<property name="resource" ref="inputExamResultJobFile" />
+
+		<property name="lineMapper">
+
+			<bean class="org.springframework.batch.item.file.mapping.DefaultLineMapper">
+
+				<property name="fieldSetMapper">
+					&lt;!&ndash; Mapper which maps each individual items in a record to properties in POJO &ndash;&gt;
+					<bean class="com.websystique.springbatch.ExamResultFieldSetMapper" />
+				</property>
+
+				<property name="lineTokenizer">
+					&lt;!&ndash; A tokenizer class to be used when items in input record are separated by specific characters &ndash;&gt;
+					<bean class="org.springframework.batch.item.file.transform.DelimitedLineTokenizer">
+						<property name="delimiter" value="|" />
+					</bean>
+				</property>
+
+			</bean>
+
+		</property>
+
+	</bean>
+-->
+
+
+	<bean id="flatFileItemReader" class="org.springframework.batch.item.file.FlatFileItemReader"  scope="step">
+		<property name="resource" ref="inputExamResultJobFile" />
+
+		<property name="lineMapper">
+
+			<bean class="org.springframework.batch.item.file.mapping.DefaultLineMapper">
+
+				<property name="fieldSetMapper">
+					<!-- Mapper which maps each individual items in a record to properties in POJO -->
+					<bean class="com.websystique.springbatch.ExamResultFieldSetMapper" />
+				</property>
+
+				<property name="lineTokenizer">
+					<bean class="org.springframework.batch.item.file.transform.FixedLengthTokenizer">
+						<property name="names" value="mode_Prlv,date_Echeance,code_produit"></property>
+						<property name="columns" value="1-4,20-29,36-37"></property>
+						<property name="strict" value="false"></property>
+
+					</bean>
+				</property>
+
+			</bean>
+
+		</property>
+
+	</bean>
+	
+	<!-- ItemWriter writes a line into output flat file -->
+<!--
+	<bean id="flatFileItemWriter" class="org.springframework.batch.item.file.FlatFileItemWriter" scope="step">
+
+		<property name="resource" value="file:csv/examResultOutput.txt" />
+
+		<property name="appendAllowed" value="true" />
+		<property name="shouldDeleteIfExists" value="true" />
+
+		<property name="lineAggregator">
+
+			&lt;!&ndash; An Aggregator which converts an object into delimited list of strings &ndash;&gt;
+			<bean
+				class="org.springframework.batch.item.file.transform.DelimitedLineAggregator">
+
+				<property name="delimiter" value="|" />
+
+				<property name="fieldExtractor">
+
+					&lt;!&ndash; Extractor which returns the value of beans property through reflection &ndash;&gt;
+					<bean
+						class="org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor">
+						<property name="names" value="studentName, percentage, dob" />
+					</bean>
+				</property>
+			</bean>
+		</property>
+	</bean>
+-->
+
+	<bean id="exampleMultiWriters" class="org.springframework.batch.item.support.ClassifierCompositeItemWriter" scope="step">
+		<property name="classifier" ref="classifier" />
+	</bean>
+
+	<bean id="classifier"  class="org.springframework.classify.BackToBackPatternClassifier">
+		<property name="routerDelegate">
+			<bean class="com.websystique.springbatch.ExampleWriterRouteImpl" />
+		</property>
+		<property name="matcherMap">
+			<map>
+				<entry key="under76" value-ref="databaseItemWriter2" />
+				<entry key="over76" value-ref="databaseItemWriter" />
+			</map>
+		</property>
+	</bean>
+
+	<bean id="under76Writer" class="org.springframework.batch.item.file.FlatFileItemWriter">
+		<!-- write to this csv file -->
+		<property name="resource" value="file:c:/temp/file/under76.csv" />
+		<property name="shouldDeleteIfExists" value="true" />
+		<property name="shouldDeleteIfEmpty" value="true" />
+		<property name="appendAllowed" value="true" />
+		<property name="lineAggregator">
+			<bean class="org.springframework.batch.item.file.transform.DelimitedLineAggregator">
+				<property name="delimiter" value="," />
+				<property name="fieldExtractor">
+					<bean class="org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor">
+						<property name="names" value="code_evenement, date_prelevement, code_produit" />
+					</bean>
+				</property>
+			</bean>
+		</property>
+	</bean>
+
+
+	<bean id="over76Writer" class="org.springframework.batch.item.file.FlatFileItemWriter">
+		<!-- write to this csv file -->
+		<property name="resource" value="file:c:/temp/file/over76.csv" />
+		<property name="shouldDeleteIfExists" value="true" />
+		<property name="shouldDeleteIfEmpty" value="true" />
+		<property name="appendAllowed" value="true" />
+		<property name="lineAggregator">
+			<bean class="org.springframework.batch.item.file.transform.DelimitedLineAggregator">
+				<property name="delimiter" value="," />
+				<property name="fieldExtractor">
+					<bean class="org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor">
+						<property name="names" value="mode_Prlv, date_Echeance, code_produit" />
+					</bean>
+				</property>
+			</bean>
+		</property>
+	</bean>
+
+	<!-- ItemWriter which writes data to database -->
+	<bean id="databaseItemWriter" class="org.springframework.batch.item.database.JdbcBatchItemWriter">
+		<property name="dataSource" ref="dataSource" />
+		<property name="sql">
+			<value>
+				<![CDATA[
+	            	insert into CRD_PRELEVEMENT(mode_Prlv , date_Echeance , code_produit )
+					values (?, ?, ?)
+	            ]]>
+			</value>
+		</property>
+
+		<!-- We need a custom setter to handle the conversion between Jodatime LocalDate and MySQL DATE -->
+		<property name="ItemPreparedStatementSetter">
+			<bean class="com.websystique.springbatch.ExamResultItemPreparedStatementSetter" />
+		</property>
+	</bean>
+
+	<!-- ItemWriter which writes data to database -->
+	<bean id="databaseItemWriter2" class="org.springframework.batch.item.database.JdbcBatchItemWriter">
+		<property name="dataSource" ref="dataSource" />
+		<property name="sql">
+			<value>
+				<![CDATA[
+	            	insert into CRD_PRELEVEMENT2(mode_Prlv , date_Echeance , code_produit )
+					values (?, ?, ?)
+	            ]]>
+			</value>
+		</property>
+
+		<!-- We need a custom setter to handle the conversion between Jodatime LocalDate and MySQL DATE -->
+		<property name="ItemPreparedStatementSetter">
+			<bean class="com.websystique.springbatch.ExamResultItemPreparedStatementSetter" />
+		</property>
+	</bean>
+	<!-- Optional ItemProcessor to perform business logic/filtering on the input records -->
+	<bean id="itemProcessor" class="com.websystique.springbatch.ExamResultItemProcessor" />
+
+	<!-- Step will need a transaction manager -->
+	<bean id="transactionManager" class="org.springframework.batch.support.transaction.ResourcelessTransactionManager" />
+
+
+	<bean id="fileArchivingTasklet" class="com.websystique.springbatch.FileArchivingTasklet" />
+
+
+	<!-- Actual Job -->
+	<batch:job id="examResultBatchJob" restartable="true">
+		<batch:step id="processFiles" next="archiveFiles">
+			<batch:tasklet allow-start-if-complete="false" start-limit="1" transaction-manager="transactionManager">
+				<batch:chunk reader="flatFileItemReader" writer="exampleMultiWriters"	processor="itemProcessor" commit-interval="10" >
+
+				<batch:streams>
+					<batch:stream ref="under76Writer"/>
+					<batch:stream ref="over76Writer"/>
+				</batch:streams>
+			</batch:chunk>
+			</batch:tasklet>
+		</batch:step>
+		<batch:step id="archiveFiles">
+			<batch:tasklet ref="fileArchivingTasklet" />
+		</batch:step>
+	</batch:job>
+
+</beans>			

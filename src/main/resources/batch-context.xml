@@ -85,7 +85,6 @@
 	</bean>
 	
 	<!-- ItemWriter writes a line into output flat file -->
-<!--
 	<bean id="flatFileItemWriter" class="org.springframework.batch.item.file.FlatFileItemWriter" scope="step">
 
 		<property name="resource" value="file:csv/examResultOutput.txt" />
@@ -95,7 +94,7 @@
 
 		<property name="lineAggregator">
 
-			&lt;!&ndash; An Aggregator which converts an object into delimited list of strings &ndash;&gt;
+			<!-- An Aggregator which converts an object into delimited list of strings -->
 			<bean
 				class="org.springframework.batch.item.file.transform.DelimitedLineAggregator">
 
@@ -103,16 +102,15 @@
 
 				<property name="fieldExtractor">
 
-					&lt;!&ndash; Extractor which returns the value of beans property through reflection &ndash;&gt;
+					<!-- Extractor which returns the value of beans property through reflection -->
 					<bean
 						class="org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor">
-						<property name="names" value="studentName, percentage, dob" />
+						<property name="names" value="mode_Prlv, date_Echeance, code_produit" />
 					</bean>
 				</property>
 			</bean>
 		</property>
 	</bean>
--->
 
 	<bean id="exampleMultiWriters" class="org.springframework.batch.item.support.ClassifierCompositeItemWriter" scope="step">
 		<property name="classifier" ref="classifier" />
@@ -130,6 +128,23 @@
 		</property>
 	</bean>
 
+
+	<bean id="exampleMultiWriters2" class="org.springframework.batch.item.support.ClassifierCompositeItemWriter" scope="step">
+		<property name="classifier" ref="classifier2" />
+	</bean>
+
+	<bean id="classifier2"  class="org.springframework.classify.BackToBackPatternClassifier">
+		<property name="routerDelegate">
+			<bean class="com.websystique.springbatch.ExampleWriterRouteImpl" />
+		</property>
+		<property name="matcherMap">
+			<map>
+				<entry key="under76" value-ref="databaseItemWriter3" />
+				<entry key="over76" value-ref="databaseItemWriter4" />
+			</map>
+		</property>
+	</bean>
+
 	<bean id="under76Writer" class="org.springframework.batch.item.file.FlatFileItemWriter">
 		<!-- write to this csv file -->
 		<property name="resource" value="file:c:/temp/file/under76.csv" />
@@ -141,7 +156,7 @@
 				<property name="delimiter" value="," />
 				<property name="fieldExtractor">
 					<bean class="org.springframework.batch.item.file.transform.BeanWrapperFieldExtractor">
-						<property name="names" value="code_evenement, date_prelevement, code_produit" />
+						<property name="names" value="mode_Prlv, date_Echeance, code_produit" />
 					</bean>
 				</property>
 			</bean>
@@ -202,6 +217,42 @@
 			<bean class="com.websystique.springbatch.ExamResultItemPreparedStatementSetter" />
 		</property>
 	</bean>
+
+	<!-- ItemWriter which writes data to database -->
+	<bean id="databaseItemWriter3" class="org.springframework.batch.item.database.JdbcBatchItemWriter">
+		<property name="dataSource" ref="dataSource2" />
+		<property name="sql">
+			<value>
+				<![CDATA[
+	            	insert into CRD_PRELEVEMENT(mode_Prlv , date_Echeance , code_produit )
+					values (?, ?, ?)
+	            ]]>
+			</value>
+		</property>
+
+		<!-- We need a custom setter to handle the conversion between Jodatime LocalDate and MySQL DATE -->
+		<property name="ItemPreparedStatementSetter">
+			<bean class="com.websystique.springbatch.ExamResultItemPreparedStatementSetter" />
+		</property>
+	</bean>
+
+	<!-- ItemWriter which writes data to database -->
+	<bean id="databaseItemWriter4" class="org.springframework.batch.item.database.JdbcBatchItemWriter">
+		<property name="dataSource" ref="dataSource2" />
+		<property name="sql">
+			<value>
+				<![CDATA[
+	            	insert into CRD_PRELEVEMENT2(mode_Prlv , date_Echeance , code_produit )
+					values (?, ?, ?)
+	            ]]>
+			</value>
+		</property>
+
+		<!-- We need a custom setter to handle the conversion between Jodatime LocalDate and MySQL DATE -->
+		<property name="ItemPreparedStatementSetter">
+			<bean class="com.websystique.springbatch.ExamResultItemPreparedStatementSetter" />
+		</property>
+	</bean>
 	<!-- Optional ItemProcessor to perform business logic/filtering on the input records -->
 	<bean id="itemProcessor" class="com.websystique.springbatch.ExamResultItemProcessor" />
 
@@ -214,7 +265,7 @@
 
 	<!-- Actual Job -->
 	<batch:job id="examResultBatchJob" restartable="true">
-		<batch:step id="processFiles" next="archiveFiles">
+		<batch:step id="processFiles" next="step2">
 			<batch:tasklet allow-start-if-complete="false" start-limit="1" transaction-manager="transactionManager">
 				<batch:chunk reader="flatFileItemReader" writer="exampleMultiWriters"	processor="itemProcessor" commit-interval="10" >
 
@@ -225,9 +276,21 @@
 			</batch:chunk>
 			</batch:tasklet>
 		</batch:step>
-		<batch:step id="archiveFiles">
+		<batch:step id="step2" next="archiveFiles">
+			<batch:tasklet>
+				<batch:chunk reader="flatFileItemReader" writer="exampleMultiWriters2"
+							 processor="itemProcessor" commit-interval="2" />
+			</batch:tasklet>
+		</batch:step>
+		<batch:step id="archiveFiles" >
 			<batch:tasklet ref="fileArchivingTasklet" />
 		</batch:step>
+		<!--<batch:step id="step2">
+			<batch:tasklet>
+				<batch:chunk reader="flatFileItemReader" writer="flatFileItemWriter"
+					   processor="itemProcessor" commit-interval="2" />
+			</batch:tasklet>
+		</batch:step>-->
 	</batch:job>
 
 </beans>			

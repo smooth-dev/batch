@@ -14,7 +14,7 @@ public class ExamResultItemProcessor implements ItemProcessor<Prelevement, Prele
 		 * Only return results which are more than 75%
 		 * 
 		 */
-		if(result.getCode_produit().contains("zz")){
+		if(result.getCode_produit().contains("33")){
 			return null;
 		}
 		

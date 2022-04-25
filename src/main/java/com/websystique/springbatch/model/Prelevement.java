@@ -4,6 +4,8 @@ package com.websystique.springbatch.model;
 import lombok.Data;
 import org.joda.time.LocalDate;
 
+import javax.validation.constraints.Size;
+
 
 @Data
 public class Prelevement {
@@ -11,6 +13,8 @@ public class Prelevement {
     private String num_dossier;
     private String code_evenement;
     private String code_Famille_Pret;
+
+    @Size(max = 1)
     private String code_produit;
     private String code_Societe;
     private String mode_Prlv;
